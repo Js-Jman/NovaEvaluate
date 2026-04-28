@@ -1,7 +1,12 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
+  serverExternalPackages: ['tesseract.js', 'pdf-parse', 'formidable', 'nodemailer'],
 };
 
 export default nextConfig;

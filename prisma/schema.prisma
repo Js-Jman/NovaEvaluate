@@ -1,0 +1,107 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Exam ─────────────────────────────────────────────────────────────────────
+
+model Exam {
+  id            Int        @id @default(autoincrement())
+  title         String
+  subject       String?
+  totalMarks    Int
+  fileUrl       String     // /uploads/exams/{id}/answer_key.ext
+  fileType      String     // "image" | "pdf" | "excel" | "text"
+  extractedText String?    @db.LongText
+  status        String     @default("draft") // draft | active | closed
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  questions Question[]
+  students  Student[]
+}
+
+// ── Question ─────────────────────────────────────────────────────────────────
+
+model Question {
+  id             Int    @id @default(autoincrement())
+  examId         Int
+  questionNumber String // "Q1", "1a", "Part A", etc.
+  questionText   String? @db.Text
+  correctAnswer  String  @db.Text
+  maxMarks       Int
+
+  exam          Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  gradedAnswers GradedAnswer[]
+}
+
+// ── Student ───────────────────────────────────────────────────────────────────
+
+model Student {
+  id         Int      @id @default(autoincrement())
+  examId     Int
+  name       String
+  email      String
+  rollNumber String?
+  fileUrl    String   // /uploads/students/{examId}/{id}/sheet.ext
+  fileType   String   // "image" | "pdf"
+  ocrText    String?  @db.LongText
+  ocrStatus  String   @default("pending") // pending | processing | done | failed
+  totalMarks Float?
+  resultSent Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  exam          Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  gradedAnswers GradedAnswer[]
+}
+
+// ── GradedAnswer ─────────────────────────────────────────────────────────────
+
+model GradedAnswer {
+  id             Int      @id @default(autoincrement())
+  studentId      Int
+  questionId     Int
+  studentAnswer  String?  @db.Text
+  aiMarks        Float
+  finalMarks     Float
+  aiFeedback     String?  @db.Text
+  aiConfidence   Int?     // 0–100 — model's self-rated confidence
+  isOverridden   Boolean  @default(false)
+  gradingModel   String?  // e.g. "gemini-1.5-flash"
+  gradedAt       DateTime @default(now())
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  auditLogs GradeAuditLog[]
+}
+
+// ── GradeAuditLog ─────────────────────────────────────────────────────────────
+
+model GradeAuditLog {
+  id          Int      @id @default(autoincrement())
+  gradeId     Int
+  oldMarks    Float
+  newMarks    Float
+  changedBy   String   @default("controller")
+  changedAt   DateTime @default(now())
+
+  grade GradedAnswer @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+}
+
+// ── AppSettings (singleton, id always = 1) ───────────────────────────────────
+
+model AppSettings {
+  id            Int      @id @default(1)
+  activeModel   String   @default("gemini-1.5-flash")
+  ocrStrategy   String   @default("gemini-vision") // "gemini-vision" | "tesseract"
+  fallbackChain Json     // ["gemini-1.5-flash", "groq-llama3", "openrouter-auto"]
+  apiKeys       Json     // { "gemini": "encrypted...", "groq": "encrypted..." }
+  updatedAt     DateTime @updatedAt
+}
