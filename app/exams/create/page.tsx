@@ -36,6 +36,14 @@ export default function CreateExamPage() {
 
   // Step 3 state
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [ocrStrategy, setOcrStrategy] = useState<string[]>([]);
+
+  // Fetch settings on load
+  useState(() => {
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      if (d.ocrStrategy) setOcrStrategy(d.ocrStrategy);
+    }).catch(() => {});
+  });
 
   const handleStep1Next = () => {
     if (!title.trim()) { toast.error('Title is required'); return; }
@@ -81,20 +89,49 @@ export default function CreateExamPage() {
 
       // Step 2: OCR
       setExtractingStep('Extracting text (OCR)...');
-      toast.info('Running OCR...');
-      const ocrRes = await fetch('/api/ocr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetType: 'answer_key',
-          targetId: 0,
-          fileUrl: uploadData.fileUrl,
-          fileType: uploadData.fileType,
-        }),
-      });
-      const ocrData = await ocrRes.json();
-      if (!ocrRes.ok) throw new Error(ocrData.error);
-      toast.success('Text extracted');
+      let ocrText = '';
+      let ocrSuccess = false;
+
+      for (let i = 0; i < ocrStrategy.length; i++) {
+        const currentModel = ocrStrategy[i];
+        setExtractingStep(`OCR using ${currentModel}...`);
+        toast.info(`Running OCR with ${currentModel}...`);
+        
+        try {
+          const ocrRes = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              targetType: 'answer_key',
+              targetId: 0,
+              fileUrl: uploadData.fileUrl,
+              fileType: uploadData.fileType,
+              modelId: currentModel,
+            }),
+          });
+          const ocrData = await ocrRes.json();
+          if (ocrRes.ok) {
+            ocrText = ocrData.ocrText;
+            ocrSuccess = true;
+            toast.success(`Text extracted successfully using ${currentModel}!`);
+            break;
+          } else {
+            toast.error(`OCR Model ${currentModel} failed: ${ocrData.error || 'Unknown error'}`);
+            if (i < ocrStrategy.length - 1) {
+              setExtractingStep(`Retrying OCR in 2s...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+          }
+        } catch (err) {
+          toast.error(`OCR Model ${currentModel} failed: Network error`);
+          if (i < ocrStrategy.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      }
+
+      if (!ocrSuccess) throw new Error('All OCR models in the fallback chain failed.');
+      toast.success('Text extraction complete');
 
       // Step 3: Parse into questions
       setExtractingStep('AI parsing questions...');
@@ -102,7 +139,7 @@ export default function CreateExamPage() {
       const parseRes = await fetch('/api/parse-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ examId: 0, ocrText: ocrData.ocrText }),
+        body: JSON.stringify({ examId: 0, ocrText: ocrText }),
       });
       const parseData = await parseRes.json();
       if (!parseRes.ok) throw new Error(parseData.error);
@@ -164,10 +201,10 @@ export default function CreateExamPage() {
                 <div className="flex flex-col items-center">
                   <motion.div
                     animate={{
-                      background: i <= step ? 'linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6)' : '#e2ddf0',
+                      backgroundColor: i <= step ? '#8b5cf6' : '#e2ddf0',
                       scale: i === step ? 1.1 : 1,
                     }}
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shadow-md"
                   >
                     {i < step ? '✓' : i + 1}
                   </motion.div>
@@ -178,7 +215,7 @@ export default function CreateExamPage() {
                 {i < STEPS.length - 1 && (
                   <motion.div
                     className="mx-4 h-0.5 w-16"
-                    animate={{ background: i < step ? 'linear-gradient(90deg, #ec4899, #8b5cf6)' : '#e2ddf0' }}
+                    animate={{ backgroundColor: i < step ? '#8b5cf6' : '#e2ddf0' }}
                   />
                 )}
               </div>

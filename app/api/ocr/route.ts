@@ -6,7 +6,7 @@ import { runOCR } from '@/lib/ocr';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { targetType, targetId, fileUrl, fileType } = body;
+    const { targetType, targetId, fileUrl, fileType, modelId } = body;
 
     if (!targetType || targetId == null || !fileUrl || !fileType) {
       return Response.json(
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ocrText = await runOCR(fileUrl, fileType);
+    const result = await runOCR(fileUrl, fileType, modelId);
+    const ocrText = result.text;
 
     // Only persist to DB if a real record ID was provided (not 0)
     if (targetType === 'student' && Number(targetId) > 0) {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return Response.json({ ocrText, status: 'done' });
+    return Response.json({ ocrText, status: 'done', modelUsed: result.modelUsed });
   } catch (error: unknown) {
     console.error('[POST /api/ocr]', error);
     const message = error instanceof Error ? error.message : 'OCR failed';

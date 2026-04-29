@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export async function sendResultEmail(studentId: number): Promise<void> {
+export async function sendResultEmail(studentId: number, isRegrade: boolean = false): Promise<void> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     include: {
@@ -27,6 +27,7 @@ export async function sendResultEmail(studentId: number): Promise<void> {
   const totalMarks = student.gradedAnswers.reduce((sum: number, g: { finalMarks: number }) => sum + g.finalMarks, 0);
 
   const html = buildResultEmail({
+    isRegrade,
     studentName: student.name,
     examTitle: student.exam.title,
     subject: student.exam.subject ?? undefined,

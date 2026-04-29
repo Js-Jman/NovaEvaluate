@@ -100,8 +100,9 @@ model GradeAuditLog {
 model AppSettings {
   id            Int      @id @default(1)
   activeModel   String   @default("gemini-1.5-flash")
-  ocrStrategy   String   @default("gemini-vision") // "gemini-vision" | "tesseract"
+  ocrStrategy   String   @default("gemini-vision") // JSON string of fallback chain
   fallbackChain Json     // ["gemini-1.5-flash", "groq-llama3", "openrouter-auto"]
   apiKeys       Json     // { "gemini": "encrypted...", "groq": "encrypted..." }
+  autoPublish   Boolean  @default(false)
   updatedAt     DateTime @updatedAt
 }

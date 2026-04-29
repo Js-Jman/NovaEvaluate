@@ -29,10 +29,12 @@ export default function ExamDetailPage({ params }: { params: Promise<{ examId: s
   const [publishing, setPublishing] = useState(false);
   const [publishingStudent, setPublishingStudent] = useState<number | null>(null);
   const [activeModel, setActiveModel] = useState<string>('AI');
+  const [fallbackChain, setFallbackChain] = useState<string[]>([]);
+  const [ocrStrategy, setOcrStrategy] = useState<string[]>([]);
 
   const fetchExam = useCallback(async () => {
     try {
-      const res = await fetch(`/api/exams/${examId}`);
+      const res = await fetch(`/api/exams/${examId}?_t=${Date.now()}`);
       const data = await res.json();
       if (res.ok) setExam(data);
       else toast.error('Failed to load exam');
@@ -42,9 +44,11 @@ export default function ExamDetailPage({ params }: { params: Promise<{ examId: s
 
   useEffect(() => { 
     fetchExam();
-    // Fetch active model for the UI toast
+    // Fetch active model and fallback chain for the UI toast
     fetch('/api/settings').then(r => r.json()).then(d => {
       if (d.activeModel) setActiveModel(d.activeModel);
+      if (d.fallbackChain) setFallbackChain(d.fallbackChain);
+      if (d.ocrStrategy) setOcrStrategy(d.ocrStrategy);
     }).catch(() => {});
   }, [fetchExam]);
 
@@ -84,11 +88,55 @@ export default function ExamDetailPage({ params }: { params: Promise<{ examId: s
       formData.append('file', file);
 
       const res = await fetch('/api/upload/student', { method: 'POST', body: formData });
+      const uploadData = await res.json();
       if (res.ok) {
-        toast.success('Student uploaded! OCR processing...');
+        toast.success('Student uploaded! Starting handwriting extraction...');
         setStudentName(''); setStudentEmail(''); setStudentRoll('');
         setShowUpload(false);
         fetchExam();
+
+        // Start OCR Fallback Chain Orchestration
+        const studentId = uploadData.studentId;
+        let ocrSuccess = false;
+
+        for (let i = 0; i < ocrStrategy.length; i++) {
+          const currentModel = ocrStrategy[i];
+          toast.info(`Extracting handwriting using model ${currentModel}...`);
+
+          try {
+            const ocrRes = await fetch('/api/ocr/run', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ studentId, modelId: currentModel }),
+            });
+
+            const ocrData = await ocrRes.json();
+
+            if (ocrRes.ok) {
+              toast.success(`Handwriting extracted successfully using ${ocrData.modelUsed}!`);
+              ocrSuccess = true;
+              fetchExam();
+              break; // Stop the OCR fallback chain
+            } else {
+              toast.error(`OCR Model ${currentModel} failed: ${ocrData.error || 'Unknown error'}`);
+              if (i < ocrStrategy.length - 1) {
+                toast.warning(`Moving on to next OCR model on fallback chain in 2 seconds...`);
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Mandatory 2-second delay
+              }
+            }
+          } catch (err) {
+            toast.error(`OCR Model ${currentModel} failed: Network error`);
+            if (i < ocrStrategy.length - 1) {
+              toast.warning(`Moving on to next OCR model on fallback chain in 2 seconds...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+          }
+        }
+
+        if (!ocrSuccess) {
+          toast.error(`All OCR models failed for student ${studentId}.`);
+        }
+
       } else {
         const data = await res.json();
         toast.error(data.error || 'Upload failed');
@@ -117,21 +165,49 @@ export default function ExamDetailPage({ params }: { params: Promise<{ examId: s
 
   const handleGradeOne = async (studentId: number, name: string) => {
     setGradingStudent(studentId);
-    toast.info(`Evaluating ${name} using model ${activeModel}...`);
-    try {
-      const res = await fetch('/api/grade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, examId: Number(examId) }),
-      });
-      const data = await res.json();
-      if (res.ok) { 
-        toast.success(`${name} graded successfully!`); 
-        fetchExam(); 
+    
+    const modelsToTry = [activeModel, ...fallbackChain.filter(m => m !== activeModel)];
+    let success = false;
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const currentModel = modelsToTry[i];
+      toast.info(`Evaluating ${name} using model ${currentModel}...`);
+      
+      try {
+        const res = await fetch('/api/grade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId, examId: Number(examId), modelId: currentModel }),
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) { 
+          toast.success(`${name} graded successfully using ${data.modelUsed}!`); 
+          success = true;
+          fetchExam(); 
+          break; // Stop the fallback chain
+        } else {
+          toast.error(`Model ${currentModel} failed: ${data.error || 'Unknown error'}`);
+          if (i < modelsToTry.length - 1) {
+            toast.warning(`Moving on to next model on fallback chain in 2 seconds...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Mandatory 2-second delay
+          }
+        }
+      } catch (err) { 
+        toast.error(`Model ${currentModel} failed: Network error`);
+        if (i < modelsToTry.length - 1) {
+          toast.warning(`Moving on to next model on fallback chain in 2 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
-      else toast.error(data.error);
-    } catch { toast.error('Grading failed'); }
-    finally { setGradingStudent(null); }
+    }
+
+    if (!success) {
+      toast.error(`All models in the fallback chain failed for ${name}.`);
+    }
+
+    setGradingStudent(null);
   };
 
   const handlePublishOne = async (studentId: number, name: string) => {

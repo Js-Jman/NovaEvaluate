@@ -1,6 +1,6 @@
 import { ocrWithGeminiVision } from './geminiVision';
 import { ocrWithGroqVision } from './groqVision';
-import { ocrWithTesseract } from './tesseractLocal';
+import { ocrWithOpenRouterVision } from './openrouterVision';
 import { extractFromPDF } from './pdfExtract';
 import prisma from '../db';
 import path from 'path';
@@ -8,10 +8,11 @@ import path from 'path';
 const OCR_PROVIDERS: Record<string, (filePath: string, fileType: string) => Promise<string>> = {
   'gemini-vision': ocrWithGeminiVision,
   'groq-vision': ocrWithGroqVision,
-  'tesseract': ocrWithTesseract,
+  'openrouter-vision': ocrWithOpenRouterVision,
 };
 
-const DEFAULT_OCR_CHAIN = ['gemini-vision', 'groq-vision', 'tesseract'];
+// Default AI-only chain
+const DEFAULT_OCR_CHAIN = ['gemini-vision', 'groq-vision', 'openrouter-vision'];
 
 /**
  * Parse the ocrStrategy from DB — handles both legacy string and new JSON array formats.
@@ -28,8 +29,7 @@ function parseOcrChain(raw: string | string[] | undefined): string[] {
     if (Array.isArray(parsed)) return parsed;
   } catch { /* not JSON */ }
 
-  // Legacy single-string value like "gemini-vision" or "tesseract"
-  // Wrap it in an array and append the rest as fallbacks
+  // Legacy single-string value like "gemini-vision"
   const chain = [raw];
   for (const provider of DEFAULT_OCR_CHAIN) {
     if (!chain.includes(provider)) chain.push(provider);
@@ -37,9 +37,10 @@ function parseOcrChain(raw: string | string[] | undefined): string[] {
   return chain;
 }
 
-export async function runOCR(fileUrl: string, fileType: string): Promise<string> {
+export async function runOCR(fileUrl: string, fileType: string, forceModel?: string): Promise<{ text: string, modelUsed: string }> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-  const chain = parseOcrChain(settings?.ocrStrategy);
+  let chain = parseOcrChain(settings?.ocrStrategy);
+  if (forceModel) chain = [forceModel];
   const fullPath = path.join(process.cwd(), 'public', fileUrl);
 
   // Excel / CSV — handled separately via parseSpreadsheet(), not OCR
@@ -52,8 +53,7 @@ export async function runOCR(fileUrl: string, fileType: string): Promise<string>
   // Typed PDFs — extract text directly, no AI needed
   if (fileType === 'pdf') {
     const text = await extractFromPDF(fullPath);
-    // If pdf-parse returns substantial text, use it
-    if (text.trim().length > 50) return text;
+    if (text.trim().length > 50) return { text, modelUsed: 'pdf-extract' };
     // Otherwise it's a scanned PDF — fall through to vision chain
   }
 
@@ -71,17 +71,16 @@ export async function runOCR(fileUrl: string, fileType: string): Promise<string>
       console.log(`[OCR] Trying provider: ${providerId}`);
       const result = await providerFn(fullPath, fileType);
       console.log(`[OCR] Success with provider: ${providerId}`);
-      return result;
-    } catch (err: any) {
-      const msg = err?.message || String(err);
+      return { text: result, modelUsed: providerId };
+    } catch (err: unknown) {
+      const msg = (err as Error)?.message || String(err);
       console.error(`[OCR] Provider "${providerId}" failed: ${msg}`);
       errors.push(`${providerId}: ${msg}`);
-      // Continue to next provider
     }
   }
 
   // All providers failed
   throw new Error(
-    `All OCR providers failed.\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
+    forceModel ? errors[0]?.split(': ').slice(1).join(': ') || 'Model failed' : `All OCR providers failed.\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
   );
 }

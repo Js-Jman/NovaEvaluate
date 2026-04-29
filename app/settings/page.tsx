@@ -28,7 +28,7 @@ const PROVIDER_ICONS: Record<string, string> = {
 const ALL_OCR_PROVIDERS = [
   { id: 'gemini-vision', label: 'Gemini Vision', icon: '✦', desc: 'AI-powered, best for handwriting', color: 'from-[#8b5cf6] to-[#6366f1]' },
   { id: 'groq-vision', label: 'Groq Vision', icon: '⚡', desc: 'Fast AI OCR, free tier', color: 'from-[#f97316] to-[#ef4444]' },
-  { id: 'tesseract', label: 'Tesseract.js', icon: '🔧', desc: 'Runs locally, no API key', color: 'from-[#10b981] to-[#059669]' },
+  { id: 'openrouter-vision', label: 'OpenRouter (Vision)', icon: '🔄', desc: 'Fallbacks to multiple free models', color: 'from-[#0ea5e9] to-[#0369a1]' }
 ];
 
 export default function SettingsPage() {
@@ -36,12 +36,13 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [ocrChain, setOcrChain] = useState<string[]>(['gemini-vision', 'groq-vision', 'tesseract']);
+  const [ocrChain, setOcrChain] = useState<string[]>(['gemini-vision', 'groq-vision', 'openrouter-vision']);
   const [activeModel, setActiveModel] = useState('gemini-1.5-flash');
   const [fallbackChain, setFallbackChain] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [testResults, setTestResults] = useState<Record<string, 'success' | 'error' | 'testing' | null>>({});
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([]);
+  const [autoPublish, setAutoPublish] = useState(false);
 
   useEffect(() => {
     toast.info('Loading settings...');
@@ -52,6 +53,7 @@ export default function SettingsPage() {
         setActiveModel(data.activeModel);
         setFallbackChain(data.fallbackChain || []);
         setConfiguredProviders(data.providers || []);
+        setAutoPublish(data.autoPublish || false);
         setLoading(false);
         toast.success('Settings loaded');
       })
@@ -62,7 +64,7 @@ export default function SettingsPage() {
     setSaving(true);
     toast.info('Saving settings...');
     try {
-      const body: Record<string, unknown> = { activeModel, ocrStrategy: ocrChain, fallbackChain };
+      const body: Record<string, unknown> = { activeModel, ocrStrategy: ocrChain, fallbackChain, autoPublish };
       const keysToSave: Record<string, string> = {};
       for (const [p, k] of Object.entries(apiKeys)) {
         if (k.trim()) keysToSave[p] = k.trim();
@@ -337,6 +339,30 @@ export default function SettingsPage() {
                   options={ALL_MODELS.map((m) => ({ value: m.id, label: m.label, subtitle: `${m.provider} ${m.vision ? '• vision' : ''}` }))}
                   placeholder="Choose a model..."
                 />
+              </div>
+            </AnimatedItem>
+
+            {/* ─── Auto Publish ─── */}
+            <AnimatedItem className="relative z-[35]">
+              <div className="nova-card p-5 sm:p-7">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h2 className="text-sm font-bold text-[#0f172a]">Auto Publish Results</h2>
+                    <p className="text-xs text-[#94a3b8]">Automatically email results to students immediately after grading</p>
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setAutoPublish(!autoPublish)}
+                    className={`relative w-14 h-7 rounded-full transition-colors duration-300 shadow-inner ${
+                      autoPublish ? 'bg-gradient-to-r from-[#8b5cf6] to-[#d946ef]' : 'bg-[#e2e8f0]'
+                    }`}
+                  >
+                    <motion.div
+                      animate={{ x: autoPublish ? 28 : 4 }}
+                      className="absolute top-1 w-5 h-5 rounded-full bg-white shadow-md"
+                    />
+                  </motion.button>
+                </div>
               </div>
             </AnimatedItem>
 

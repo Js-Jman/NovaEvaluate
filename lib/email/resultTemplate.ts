@@ -13,71 +13,152 @@ export function buildResultEmail(data: {
     aiFeedback?: string;
   }>;
   overallFeedback?: string;
+  isRegrade?: boolean;
 }): string {
   const percentage = Math.round((data.totalMarks / data.maxMarks) * 100);
   const passed = percentage >= 40;
 
-  const gradeRows = data.grades.map(g => `
+  const gradeRows = data.grades.map(g => {
+    const isCorrect = g.finalMarks === g.maxMarks;
+    const isPartial = g.finalMarks > 0 && g.finalMarks < g.maxMarks;
+    const markColor = isCorrect ? '#059669' : isPartial ? '#d97706' : '#dc2626';
+    const markBg = isCorrect ? '#d1fae5' : isPartial ? '#fef3c7' : '#fee2e2';
+
+    return `
     <tr>
-      <td style="padding:12px 16px;border-bottom:1px solid #1e1538;font-weight:600;color:#e0d4f5">${g.questionNumber}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #1e1538;color:#a89bc2;font-size:13px">${g.studentAnswer ?? '—'}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #1e1538;color:#c4b5fd;font-size:13px">${g.correctAnswer.substring(0, 80)}${g.correctAnswer.length > 80 ? '...' : ''}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #1e1538;text-align:center;font-weight:700;color:${g.finalMarks === g.maxMarks ? '#34d399' : g.finalMarks === 0 ? '#f87171' : '#fbbf24'}">${g.finalMarks}/${g.maxMarks}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #1e1538;color:#a89bc2;font-size:12px">${g.aiFeedback ?? ''}</td>
+      <td style="padding: 24px 0; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="36" style="vertical-align: top;">
+              <table width="32" height="32" border="0" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; border-radius: 50%;">
+                <tr>
+                  <td style="color: #4b5563; font-size: 13px; font-weight: 700; text-align: center; vertical-align: middle;">
+                    ${g.questionNumber}
+                  </td>
+                </tr>
+              </table>
+            </td>
+            <td style="padding-left: 16px; vertical-align: top;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding-bottom: 12px;">
+                    <p style="margin: 0 0 4px; font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Your Answer</p>
+                    <p style="margin: 0; font-size: 14px; color: #111827; line-height: 1.6;">${g.studentAnswer || '<span style="color:#9ca3af;font-style:italic;">No answer provided</span>'}</p>
+                  </td>
+                </tr>
+                ${!isCorrect ? `
+                <tr>
+                  <td style="padding-bottom: 16px;">
+                    <div style="border-left: 3px solid #10b981; padding-left: 12px;">
+                      <p style="margin: 0 0 4px; font-size: 11px; color: #059669; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Correct Answer</p>
+                      <p style="margin: 0; font-size: 14px; color: #064e3b; line-height: 1.6;">${g.correctAnswer}</p>
+                    </div>
+                  </td>
+                </tr>
+                ` : ''}
+                ${g.aiFeedback ? `
+                <tr>
+                  <td>
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px;">
+                      <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;"><strong style="color: #6366f1;">AI Feedback:</strong> ${g.aiFeedback}</p>
+                    </div>
+                  </td>
+                </tr>
+                ` : ''}
+              </table>
+            </td>
+            <td width="80" style="vertical-align: top; text-align: right; padding-left: 16px;">
+              <div style="background-color: ${markBg}; color: ${markColor}; padding: 6px 10px; border-radius: 6px; font-size: 14px; font-weight: 700; display: inline-block; white-space: nowrap;">
+                ${g.finalMarks} / ${g.maxMarks}
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
     </tr>
-  `).join('');
+    `;
+  }).join('');
 
   return `
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Result — ${data.examTitle}</title></head>
-<body style="margin:0;padding:0;background:#0a0612;font-family:'Segoe UI',Arial,sans-serif">
-  <div style="max-width:640px;margin:32px auto;background:#110d1f;border-radius:16px;overflow:hidden;border:1px solid #2d2450;box-shadow:0 8px 40px rgba(139,92,246,0.2)">
-    <div style="background:linear-gradient(135deg,#ec4899,#8b5cf6,#3b82f6);padding:36px 40px">
-      <div style="color:rgba(255,255,255,0.7);font-size:13px;text-transform:uppercase;letter-spacing:2px;font-weight:600">NovaEvaluate</div>
-      <div style="color:#ffffff;font-size:26px;font-weight:700;margin-top:8px">${data.examTitle}</div>
-      ${data.subject ? `<div style="color:rgba(255,255,255,0.8);font-size:14px;margin-top:4px">${data.subject}</div>` : ''}
-    </div>
-    <div style="padding:32px 40px;border-bottom:1px solid #1e1538">
-      <table style="width:100%"><tr>
-        <td style="text-align:center;min-width:100px;vertical-align:top">
-          <div style="font-size:52px;font-weight:800;background:linear-gradient(135deg,${passed ? '#34d399,#3b82f6' : '#f87171,#fbbf24'});-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${percentage}%</div>
-          <div style="background:${passed ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)'};color:${passed ? '#34d399' : '#f87171'};padding:6px 20px;border-radius:999px;font-size:13px;font-weight:600;display:inline-block;margin-top:6px;border:1px solid ${passed ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}">${passed ? 'PASS ✓' : 'FAIL ✗'}</div>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exam Results — ${data.examTitle}</title>
+</head>
+<body style="margin: 0; padding: 40px 0; background-color: #f3f4f6; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji'; -webkit-font-smoothing: antialiased;">
+  <center>
+    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1);">
+      <!-- Header -->
+      <tr>
+        <td style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%); padding: 48px 40px; text-align: center;">
+          <p style="margin: 0 0 12px; color: rgba(255,255,255,0.8); font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;">NovaEvaluate</p>
+          <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 800; letter-spacing: -0.5px;">${data.examTitle}</h1>
+          ${data.subject ? `<p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 16px; font-weight: 500;">${data.subject}</p>` : ''}
         </td>
-        <td style="padding-left:24px;vertical-align:top">
-          <div style="font-size:18px;font-weight:600;color:#f8f5ff">Hello, ${data.studentName}</div>
-          <div style="color:#a89bc2;margin-top:6px">Your result for this exam:</div>
-          <div style="font-size:32px;font-weight:700;color:#e0d4f5;margin-top:6px">${data.totalMarks} <span style="font-size:16px;color:#6b5a85">/ ${data.maxMarks} marks</span></div>
+      </tr>
+      
+      <!-- Greeting & Score Summary -->
+      <tr>
+        <td style="padding: 48px 40px 32px;">
+          <p style="margin: 0 0 8px; font-size: 20px; color: #111827; font-weight: 700;">Hello ${data.studentName},</p>
+          ${data.isRegrade ? 
+            `<p style="margin: 0 0 32px; font-size: 15px; color: #b45309; background-color: #fffbeb; padding: 12px; border-radius: 8px; border: 1px solid #fef3c7; line-height: 1.6;"><strong>Note:</strong> Your exam has been <strong>regraded</strong>. Below is your updated performance breakdown.</p>` 
+            : 
+            `<p style="margin: 0 0 32px; font-size: 15px; color: #6b7280; line-height: 1.6;">Your exam has been successfully evaluated. Here is your detailed performance breakdown.</p>`
+          }
+          
+          <!-- Score Card -->
+          <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px;">
+            <tr>
+              <td width="50%" style="padding: 32px; text-align: center; border-right: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Total Score</p>
+                <p style="margin: 12px 0 0; font-size: 48px; font-weight: 800; color: #0f172a; line-height: 1;">${data.totalMarks}<span style="font-size: 20px; color: #94a3b8; font-weight: 600;">/${data.maxMarks}</span></p>
+              </td>
+              <td width="50%" style="padding: 32px; text-align: center;">
+                <p style="margin: 0 0 16px; font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Status</p>
+                <div>
+                  <span style="display: inline-block; padding: 6px 20px; background-color: ${passed ? '#ecfdf5' : '#fef2f2'}; color: ${passed ? '#059669' : '#dc2626'}; border-radius: 9999px; font-size: 14px; font-weight: 800; border: 1px solid ${passed ? '#a7f3d0' : '#fecaca'}; box-shadow: 0 2px 10px ${passed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};">${passed ? 'PASSED' : 'FAILED'}</span>
+                </div>
+                <p style="margin: 12px 0 0; font-size: 15px; color: ${passed ? '#059669' : '#dc2626'}; font-weight: 700;">${percentage}%</p>
+              </td>
+            </tr>
+          </table>
         </td>
-      </tr></table>
-    </div>
-    <div style="padding:32px 40px">
-      <div style="font-size:16px;font-weight:600;color:#c4b5fd;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;font-size:12px">Question-wise Breakdown</div>
-      <table style="width:100%;border-collapse:collapse;font-size:14px">
-        <thead>
-          <tr style="background:#160f2a">
-            <th style="padding:12px 16px;text-align:left;color:#6b5a85;font-weight:600;border-bottom:2px solid #2d2450;font-size:11px;text-transform:uppercase;letter-spacing:1px">Q No.</th>
-            <th style="padding:12px 16px;text-align:left;color:#6b5a85;font-weight:600;border-bottom:2px solid #2d2450;font-size:11px;text-transform:uppercase;letter-spacing:1px">Your Answer</th>
-            <th style="padding:12px 16px;text-align:left;color:#6b5a85;font-weight:600;border-bottom:2px solid #2d2450;font-size:11px;text-transform:uppercase;letter-spacing:1px">Correct</th>
-            <th style="padding:12px 16px;text-align:center;color:#6b5a85;font-weight:600;border-bottom:2px solid #2d2450;font-size:11px;text-transform:uppercase;letter-spacing:1px">Marks</th>
-            <th style="padding:12px 16px;text-align:left;color:#6b5a85;font-weight:600;border-bottom:2px solid #2d2450;font-size:11px;text-transform:uppercase;letter-spacing:1px">Feedback</th>
-          </tr>
-        </thead>
-        <tbody>${gradeRows}</tbody>
-      </table>
-    </div>
-    ${data.overallFeedback ? `
-    <div style="padding:0 40px 32px">
-      <div style="background:#160f2a;border-left:4px solid #8b5cf6;padding:16px 20px;border-radius:0 12px 12px 0">
-        <div style="font-size:12px;font-weight:600;color:#8b5cf6;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Overall Feedback</div>
-        <div style="color:#c4b5fd;font-size:14px;line-height:1.5">${data.overallFeedback}</div>
-      </div>
-    </div>` : ''}
-    <div style="background:#0d0919;padding:24px 40px;text-align:center;color:#4a3d6e;font-size:12px;border-top:1px solid #1e1538">
-      Generated by <strong style="color:#8b5cf6">NovaEvaluate</strong> — AI-Powered Worksheet Grader<br>
-      For queries, contact your instructor.
-    </div>
-  </div>
+      </tr>
+
+      <!-- Overall Feedback -->
+      ${data.overallFeedback ? `
+      <tr>
+        <td style="padding: 0 40px 40px;">
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+            <p style="margin: 0 0 8px; font-size: 12px; color: #b45309; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Overall Feedback</p>
+            <p style="margin: 0; font-size: 15px; color: #92400e; line-height: 1.6;">${data.overallFeedback}</p>
+          </div>
+        </td>
+      </tr>
+      ` : ''}
+
+      <!-- Detailed Breakdown -->
+      <tr>
+        <td style="padding: 0 40px 48px;">
+          <h2 style="margin: 0 0 24px; font-size: 20px; color: #111827; font-weight: 800; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px;">Question Breakdown</h2>
+          <table width="100%" border="0" cellpadding="0" cellspacing="0">
+            ${gradeRows}
+          </table>
+        </td>
+      </tr>
+
+      <!-- Footer -->
+      <tr>
+        <td style="background-color: #f9fafb; padding: 32px 40px; text-align: center; border-top: 1px solid #f3f4f6;">
+          <p style="margin: 0; font-size: 14px; color: #9ca3af;">Evaluated by <strong style="color: #6366f1;">NovaEvaluate AI</strong></p>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #d1d5db;">Please contact your instructor if you have any questions.</p>
+        </td>
+      </tr>
+    </table>
+  </center>
 </body>
 </html>`;
 }

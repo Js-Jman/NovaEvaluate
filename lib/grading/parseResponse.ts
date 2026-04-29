@@ -41,13 +41,11 @@ export function parseGradeResponse(raw: string): GradeResult {
     throw new Error('Invalid grade response: missing "grades" array');
   }
 
-  // Ensure totalMarks is computed if missing
-  if (typeof result.totalMarks !== 'number') {
-    result.totalMarks = (result.grades as GradeItem[]).reduce(
-      (sum: number, g: GradeItem) => sum + (g.marksAwarded || 0),
-      0
-    );
-  }
+  // Always recalculate totalMarks from the grades array to prevent AI math hallucination
+  result.totalMarks = (result.grades as GradeItem[]).reduce(
+    (sum: number, g: GradeItem) => sum + (parseFloat(String(g.marksAwarded)) || 0),
+    0
+  );
 
   return result as unknown as GradeResult;
 }

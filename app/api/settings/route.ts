@@ -38,6 +38,7 @@ export async function GET() {
       ocrStrategy,
       fallbackChain: settings.fallbackChain,
       providers,
+      autoPublish: (settings as any).autoPublish,
     });
   } catch (error) {
     console.error('[GET /api/settings]', error);
@@ -59,6 +60,7 @@ export async function PUT(request: NextRequest) {
         : body.ocrStrategy;
     }
     if (body.fallbackChain) updateData.fallbackChain = body.fallbackChain;
+    if (typeof body.autoPublish === 'boolean') updateData.autoPublish = body.autoPublish;
 
     if (body.apiKeys) {
       // Get existing keys

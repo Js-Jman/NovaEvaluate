@@ -24,7 +24,7 @@ export type AITask = {
 
 export type AITaskPayload = AITask | ((modelId: string) => AITask);
 
-export async function callAI(taskPayload: AITaskPayload): Promise<{ text: string; modelUsed: string }> {
+export async function callAI(taskPayload: AITaskPayload, forceModel?: string): Promise<{ text: string; modelUsed: string; fallbackErrors: { modelId: string, error: string }[] }> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   if (!settings) throw new Error('AppSettings not configured. Run the seed script first.');
 
@@ -51,12 +51,18 @@ export async function callAI(taskPayload: AITaskPayload): Promise<{ text: string
   if (!keys.openrouter) keys.openrouter = process.env.OPENROUTER_API_KEY || '';
 
   // Prioritize active model, then fallback chain, removing duplicates
-  const modelsToTry = [activeModel];
+  let modelsToTry = [activeModel];
   for (const model of rawChain) {
     if (!modelsToTry.includes(model)) {
       modelsToTry.push(model);
     }
   }
+  
+  if (forceModel) {
+    modelsToTry = [forceModel];
+  }
+
+  const fallbackErrors: { modelId: string, error: string }[] = [];
 
   for (const modelId of modelsToTry) {
     const task = typeof taskPayload === 'function' ? taskPayload(modelId) : taskPayload;
@@ -82,15 +88,16 @@ export async function callAI(taskPayload: AITaskPayload): Promise<{ text: string
       else if (provider === 'cohere') text = await callCohere(modelId, task, apiKey);
       else continue;
 
-      return { text, modelUsed: modelId };
+      return { text, modelUsed: modelId, fallbackErrors };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[switchboard] Model ${modelId} failed: ${msg}. Trying next...`);
+      fallbackErrors.push({ modelId, error: msg });
       continue;
     }
   }
 
-  throw new Error('All AI models in fallback chain failed or are unavailable.');
+  throw new Error(forceModel ? fallbackErrors[0]?.error || 'Model failed' : `All AI models in fallback chain failed. Errors: ${JSON.stringify(fallbackErrors)}`);
 }
 
 function getProvider(modelId: string): string {

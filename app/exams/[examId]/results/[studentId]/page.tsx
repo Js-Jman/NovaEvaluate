@@ -177,7 +177,7 @@ export default function StudentResultPage({ params }: { params: Promise<{ examId
                       <input type="number" min={0} max={g.maxMarks} step={0.5}
                         value={currentMarks}
                         onChange={(e) => setOverrides((prev) => ({ ...prev, [g.id]: Number(e.target.value) }))}
-                        className={`nova-input w-18 py-1.5 px-2 text-center text-sm font-bold ${hasOverride ? 'border-[#fbbf24] bg-[#fef9e7]' : ''}`}
+                        className={`nova-input w-24 py-1.5 px-2 text-center text-sm font-bold ${hasOverride ? 'border-[#fbbf24] bg-[#fef9e7]' : ''}`}
                       />
                     </div>
 

@@ -54,22 +54,6 @@ export async function POST(request: NextRequest) {
       data: { fileUrl },
     });
 
-    // Fire-and-forget OCR — don't await, update DB asynchronously
-    runOCR(fileUrl, fileType)
-      .then(async (ocrText) => {
-        await prisma.student.update({
-          where: { id: student.id },
-          data: { ocrText, ocrStatus: 'done' },
-        });
-      })
-      .catch(async (err) => {
-        console.error(`[OCR] Failed for student ${student.id}:`, err);
-        await prisma.student.update({
-          where: { id: student.id },
-          data: { ocrStatus: 'failed' },
-        });
-      });
-
     return Response.json(
       { studentId: student.id, fileUrl, ocrStatus: 'processing' },
       { status: 201 }

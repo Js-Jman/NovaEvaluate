@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '20mb',
     },
   },
-  serverExternalPackages: ['tesseract.js', 'pdf-parse', 'formidable', 'nodemailer'],
+  serverExternalPackages: ['pdf-parse', 'formidable', 'nodemailer'],
 };
 
 export default nextConfig;

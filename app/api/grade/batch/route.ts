@@ -25,10 +25,22 @@ export async function POST(request: NextRequest) {
     let failed = 0;
     const failedStudents: string[] = [];
 
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+
     // Process sequentially to avoid rate limits
     for (const student of students) {
       try {
         await gradeStudent(student.id, Number(examId));
+        
+        if ((settings as any)?.autoPublish) {
+          try {
+            const { sendResultEmail } = await import('@/lib/email/sendResult');
+            await sendResultEmail(student.id, false);
+          } catch (e) {
+            console.error(`[AutoPublish] Email failed for ${student.name}:`, e);
+          }
+        }
+        
         processed++;
       } catch (error: unknown) {
         failed++;

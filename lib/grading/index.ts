@@ -5,8 +5,9 @@ import { parseGradeResponse } from './parseResponse';
 
 export async function gradeStudent(
   studentId: number,
-  examId: number
-): Promise<{ totalMarks: number; modelUsed: string }> {
+  examId: number,
+  forceModel?: string
+): Promise<{ totalMarks: number; modelUsed: string; fallbackErrors?: { modelId: string, error: string }[] }> {
   const student = await prisma.student.findUnique({ where: { id: studentId } });
   if (!student) throw new Error(`Student ${studentId} not found`);
   if (student.ocrStatus !== 'done' || !student.ocrText) {
@@ -34,7 +35,7 @@ export async function gradeStudent(
     )
   });
 
-  const { text: aiResponse, modelUsed } = await callAI(taskPayload);
+  const { text: aiResponse, modelUsed, fallbackErrors } = await callAI(taskPayload, forceModel);
   const gradeResult = parseGradeResponse(aiResponse);
 
   await prisma.gradedAnswer.deleteMany({ where: { studentId } });
@@ -62,7 +63,7 @@ export async function gradeStudent(
     data: { totalMarks: gradeResult.totalMarks },
   });
 
-  return { totalMarks: gradeResult.totalMarks, modelUsed };
+  return { totalMarks: gradeResult.totalMarks, modelUsed, fallbackErrors };
 }
 
 function parseStudentOCR(ocrText: string): Record<string, string> {
