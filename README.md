@@ -72,4 +72,3 @@ NovaEvaluate follows a **Resilient Switchboard Architecture**, designed to ensur
 5.  **AI Configuration**: Enter your API keys and select your "Active Model" to begin grading.
 
 ---
-*Developed for industrial-grade AI evaluation by NovaEvaluate.*
